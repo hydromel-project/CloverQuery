@@ -21,12 +21,13 @@ RUN npm run build
 FROM node:20-alpine
 
 # Install Chromium and dependencies
-RUN apk add --no-cache \
+RUN apk update && apk add --no-cache \
     chromium \
     freetype \
     harfbuzz \
     ca-certificates \
-    ttf-freefont
+    ttf-freefont \
+    curl
 
 # Configure Puppeteer to use installed Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
@@ -36,9 +37,9 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 WORKDIR /app
 RUN mkdir -p /app/data /app/reports /app/scripts
 
-# Copy package files and dependencies
+# Copy package files and dependencies (use dev dependencies for scripts)
 COPY ./package.json package-lock.json /app/
-COPY --from=production-dependencies-env /app/node_modules /app/node_modules
+COPY --from=development-dependencies-env /app/node_modules /app/node_modules
 
 # Copy built application
 COPY --from=build-env /app/build /app/build
