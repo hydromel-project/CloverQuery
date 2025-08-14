@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: clover-query
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./.env:/app/.env:ro
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:./data/dev.db
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.5'
+    networks:
+      - clover-network
+
+networks:
+  clover-network:
+    driver: bridge
+
+volumes:
+  clover-data:
+  clover-reports:

@@ -9,6 +9,20 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { LanguageProvider } from "./lib/language-context";
+
+// Initialize server on first load
+let serverInitialized = false;
+
+export async function loader() {
+  // Server-side initialization (only run once)
+  if (!serverInitialized) {
+    const { initializeServer } = await import("./services/startup.server");
+    initializeServer();
+    serverInitialized = true;
+  }
+  return null;
+}
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -42,7 +56,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  return (
+    <LanguageProvider>
+      <Outlet />
+    </LanguageProvider>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
