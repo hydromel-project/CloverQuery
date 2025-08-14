@@ -116,6 +116,8 @@ export interface CustomersResponse {
 export class CloverClient {
   private baseUrl: string;
   private config: CloverConfig;
+  private lastRequestTime: number = 0;
+  private readonly rateLimitDelay: number = 2000; // 2 seconds between requests
 
   constructor(config: CloverConfig) {
     this.config = config;
@@ -128,7 +130,27 @@ export class CloverClient {
       : 'https://api.clover.com';
   }
 
+  private async sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private async enforceRateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.rateLimitDelay) {
+      const waitTime = this.rateLimitDelay - timeSinceLastRequest;
+      console.log(`[RateLimit] Waiting ${waitTime}ms before next request to ${this.config.currency} API`);
+      await this.sleep(waitTime);
+    }
+    
+    this.lastRequestTime = Date.now();
+  }
+
   private async makeRequest<T>(endpoint: string): Promise<T> {
+    // Enforce rate limit before making the request
+    await this.enforceRateLimit();
+    
     const url = `${this.baseUrl}${endpoint}`;
     
     const response = await fetch(url, {
