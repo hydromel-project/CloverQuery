@@ -117,11 +117,13 @@ export class CloverClient {
   private baseUrl: string;
   private config: CloverConfig;
   private lastRequestTime: number = 0;
-  private readonly rateLimitDelay: number = 2000; // 2 seconds between requests
+  private readonly rateLimitDelay: number;
 
   constructor(config: CloverConfig) {
     this.config = config;
     this.baseUrl = this.getBaseUrl(config.environment);
+    // Get rate limit delay from environment or default to 2000ms (2 seconds)
+    this.rateLimitDelay = parseInt(process.env.CLOVER_RATE_LIMIT_MS || '2000', 10);
   }
 
   private getBaseUrl(environment: string): string {
