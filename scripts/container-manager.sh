@@ -11,6 +11,16 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 CONTAINER_NAME="clover-query"
 LOG_FILE="/var/log/clover-manager.log"
 
+# Detect Docker Compose command
+if docker compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker compose"
+elif docker-compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+else
+    error "Docker Compose is not available"
+    exit 1
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -37,8 +47,8 @@ show_status() {
     info "CloverQuery Container Status:"
     echo "================================"
     
-    if docker compose ps | grep -q "$CONTAINER_NAME"; then
-        docker compose ps
+    if $DOCKER_COMPOSE_CMD ps | grep -q "$CONTAINER_NAME"; then
+        $DOCKER_COMPOSE_CMD ps
         echo ""
         
         # Show resource usage
@@ -48,7 +58,7 @@ show_status() {
         
         # Show recent logs
         info "Recent logs (last 10 lines):"
-        docker compose logs --tail=10 app
+        $DOCKER_COMPOSE_CMD logs --tail=10 app
     else
         warning "Container is not running"
     fi
@@ -58,20 +68,20 @@ show_status() {
 start_container() {
     info "Starting CloverQuery container..."
     
-    if docker compose ps | grep -q "Up"; then
+    if $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         warning "Container is already running"
         return 0
     fi
     
-    docker compose up -d
+    $DOCKER_COMPOSE_CMD up -d
     sleep 5
     
-    if docker compose ps | grep -q "Up"; then
+    if $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         success "Container started successfully"
         show_status
     else
         error "Failed to start container"
-        docker compose logs app
+        $DOCKER_COMPOSE_CMD logs app
         exit 1
     fi
 }
@@ -80,22 +90,22 @@ start_container() {
 stop_container() {
     info "Stopping CloverQuery container..."
     
-    if ! docker compose ps | grep -q "Up"; then
+    if ! $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         warning "Container is not running"
         return 0
     fi
     
-    docker compose stop
+    $DOCKER_COMPOSE_CMD stop
     success "Container stopped"
 }
 
 # Function to restart container
 restart_container() {
     info "Restarting CloverQuery container..."
-    docker compose restart
+    $DOCKER_COMPOSE_CMD restart
     sleep 5
     
-    if docker compose ps | grep -q "Up"; then
+    if $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         success "Container restarted successfully"
     else
         error "Failed to restart container"
@@ -113,19 +123,19 @@ update_container() {
     
     # Rebuild and restart
     info "Rebuilding container..."
-    docker compose build --no-cache
+    $DOCKER_COMPOSE_CMD build --no-cache
     
     info "Restarting with new image..."
-    docker compose up -d
+    $DOCKER_COMPOSE_CMD up -d
     
     sleep 10
     
-    if docker compose ps | grep -q "Up"; then
+    if $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         success "Container updated and restarted successfully"
         show_status
     else
         error "Failed to update container"
-        docker compose logs app
+        $DOCKER_COMPOSE_CMD logs app
         exit 1
     fi
 }
@@ -134,19 +144,32 @@ update_container() {
 show_logs() {
     local lines=${1:-50}
     info "Showing last $lines lines of logs:"
-    docker compose logs --tail="$lines" -f app
+    $DOCKER_COMPOSE_CMD logs --tail="$lines" -f app
 }
 
 # Function to run manual sync
 manual_sync() {
     info "Running manual sync and email..."
     
-    if ! docker compose ps | grep -q "Up"; then
+    if ! $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         error "Container is not running. Start it first with: $0 start"
         exit 1
     fi
     
-    docker compose exec app npm run sync-and-email
+    $DOCKER_COMPOSE_CMD exec app npm run sync-and-email
+}
+
+# Function to run sync only (no email)
+sync_data() {
+    info "Running data sync only (no email)..."
+    
+    if ! $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
+        error "Container is not running. Start it first with: $0 start"
+        exit 1
+    fi
+    
+    $DOCKER_COMPOSE_CMD exec app npm run sync
+    success "Data sync completed"
 }
 
 # Function to run individual reports
@@ -158,20 +181,20 @@ run_report() {
         exit 1
     fi
     
-    if ! docker compose ps | grep -q "Up"; then
+    if ! $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         error "Container is not running. Start it first with: $0 start"
         exit 1
     fi
     
     case "$report_type" in
         expired)
-            docker compose exec app npm run pdf:expired
+            $DOCKER_COMPOSE_CMD exec app npm run pdf:expired
             ;;
         expiring)
-            docker compose exec app npm run pdf:expiring
+            $DOCKER_COMPOSE_CMD exec app npm run pdf:expiring
             ;;
         action)
-            docker compose exec app npm run pdf:action
+            $DOCKER_COMPOSE_CMD exec app npm run pdf:action
             ;;
         *)
             error "Invalid report type. Options: expired, expiring, action"
@@ -184,12 +207,12 @@ run_report() {
 shell_access() {
     info "Opening shell in CloverQuery container..."
     
-    if ! docker compose ps | grep -q "Up"; then
+    if ! $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         error "Container is not running. Start it first with: $0 start"
         exit 1
     fi
     
-    docker compose exec app bash
+    $DOCKER_COMPOSE_CMD exec app bash
 }
 
 # Function to cleanup
@@ -235,7 +258,7 @@ health_check() {
     echo "=========================="
     
     # Container status
-    if docker compose ps | grep -q "Up"; then
+    if $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         success "✓ Container is running"
     else
         error "✗ Container is not running"
@@ -269,7 +292,7 @@ health_check() {
     fi
     
     # Network connectivity
-    if docker compose exec app curl -s --max-time 10 https://api.clover.com > /dev/null 2>&1; then
+    if $DOCKER_COMPOSE_CMD exec app curl -s --max-time 10 https://api.clover.com > /dev/null 2>&1; then
         success "✓ Clover API connectivity"
     else
         warning "⚠ Cannot reach Clover API"
@@ -290,7 +313,8 @@ show_usage() {
     echo "  restart             Restart the container"
     echo "  update              Pull latest code and rebuild container"
     echo "  logs [lines]        Show container logs (default: 50 lines)"
-    echo "  sync                Run manual sync and email workflow"
+    echo "  sync                Run full sync and email workflow"
+    echo "  sync-data           Run data sync only (no email)"
     echo "  report <type>       Generate specific report (expired|expiring|action)"
     echo "  shell               Access container shell"
     echo "  health              Run health check"
@@ -300,8 +324,9 @@ show_usage() {
     echo "Examples:"
     echo "  $0 status"
     echo "  $0 logs 100"
+    echo "  $0 sync-data       # Sync without sending emails"
+    echo "  $0 sync            # Full sync with email reports"
     echo "  $0 report expired"
-    echo "  $0 sync"
 }
 
 # Main script logic
@@ -326,6 +351,9 @@ case "${1:-}" in
         ;;
     sync)
         manual_sync
+        ;;
+    sync-data)
+        sync_data
         ;;
     report)
         run_report "$2"

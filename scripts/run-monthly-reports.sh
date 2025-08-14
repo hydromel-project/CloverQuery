@@ -70,7 +70,11 @@ check_prerequisites() {
     fi
     
     # Check if Docker Compose is available
-    if ! docker compose version &> /dev/null; then
+    if docker compose version &> /dev/null; then
+        DOCKER_COMPOSE_CMD="docker compose"
+    elif docker-compose version &> /dev/null; then
+        DOCKER_COMPOSE_CMD="docker-compose"
+    else
         error_exit "Docker Compose is not available"
     fi
     
@@ -99,11 +103,11 @@ ensure_container_running() {
     cd "$PROJECT_DIR"
     
     # Check if container exists and is running
-    if docker compose ps | grep -q "Up"; then
+    if $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         success "Container is already running"
     else
         info "Starting CloverQuery container..."
-        docker compose up -d
+        $DOCKER_COMPOSE_CMD up -d
         
         # Wait for container to be ready
         info "Waiting for container to be ready..."
@@ -111,7 +115,7 @@ ensure_container_running() {
         
         # Verify container is healthy
         for i in {1..6}; do
-            if docker compose ps | grep -q "Up.*healthy\|Up"; then
+            if $DOCKER_COMPOSE_CMD ps | grep -q "Up.*healthy\|Up"; then
                 success "Container is running and ready"
                 break
             else
@@ -131,18 +135,25 @@ run_monthly_reports() {
     
     cd "$PROJECT_DIR"
     
-    # Execute the sync and email workflow
-    if docker compose exec -T app npm run sync-and-email; then
+    # Execute the sync and email workflow inside container
+    if $DOCKER_COMPOSE_CMD exec -T app npm run sync-and-email; then
         success "Monthly reports workflow completed successfully"
-        
-        # Log some statistics
-        EXPIRED_COUNT=$(docker compose exec -T app npm run pdf:expired 2>/dev/null | grep "Customers:" | tail -1 | grep -o '[0-9]\+' || echo "0")
-        EXPIRING_COUNT=$(docker compose exec -T app npm run pdf:expiring 2>/dev/null | grep "Customers:" | tail -1 | grep -o '[0-9]\+' || echo "0")
-        
-        log "STATS: Expired cards: $EXPIRED_COUNT, Expiring cards: $EXPIRING_COUNT"
-        
     else
         error_exit "Monthly reports workflow failed"
+    fi
+}
+
+# Run sync only (no email)
+run_sync_only() {
+    info "Running data sync only..."
+    
+    cd "$PROJECT_DIR"
+    
+    # Execute sync inside container
+    if $DOCKER_COMPOSE_CMD exec -T app npm run sync; then
+        success "Data sync completed successfully"
+    else
+        error_exit "Data sync failed"
     fi
 }
 

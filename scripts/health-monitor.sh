@@ -14,6 +14,16 @@ ALERT_EMAIL="${ALERT_EMAIL:-info@umatek.com}"
 MAX_RESTART_ATTEMPTS=3
 RESTART_COOLDOWN=300  # 5 minutes between restart attempts
 
+# Detect Docker Compose command
+if docker compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker compose"
+elif docker-compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+else
+    error "Docker Compose is not available"
+    exit 1
+fi
+
 # Lock file to prevent multiple instances
 LOCK_FILE="/tmp/clover-health-monitor.lock"
 
@@ -59,7 +69,7 @@ cd "$PROJECT_DIR"
 
 # Check if container exists
 check_container_exists() {
-    if ! docker compose ps -q app &>/dev/null; then
+    if ! $DOCKER_COMPOSE_CMD ps -q app &>/dev/null; then
         warning "CloverQuery container does not exist"
         return 1
     fi
@@ -68,7 +78,7 @@ check_container_exists() {
 
 # Check if container is running
 check_container_running() {
-    if docker compose ps | grep -q "Up"; then
+    if $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         return 0
     else
         return 1
@@ -80,7 +90,7 @@ check_container_health() {
     local health_status
     
     # Check if container responds to HTTP
-    if docker compose exec -T app curl -sf http://localhost:3000/ >/dev/null 2>&1; then
+    if $DOCKER_COMPOSE_CMD exec -T app curl -sf http://localhost:3000/ >/dev/null 2>&1; then
         return 0
     else
         return 1
@@ -125,11 +135,11 @@ restart_container() {
     warning "Restarting container (attempt $attempt/$MAX_RESTART_ATTEMPTS)..."
     
     # Stop container gracefully
-    docker compose stop app || true
+    $DOCKER_COMPOSE_CMD stop app || true
     sleep 10
     
     # Start container
-    if docker compose up -d app; then
+    if $DOCKER_COMPOSE_CMD up -d app; then
         sleep 15
         
         # Verify it's working
@@ -173,7 +183,7 @@ perform_health_check() {
     # Check if container exists
     if ! check_container_exists; then
         warning "Container does not exist, creating..."
-        docker compose up -d app
+        $DOCKER_COMPOSE_CMD up -d app
         sleep 15
     fi
     

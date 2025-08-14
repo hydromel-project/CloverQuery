@@ -20,19 +20,13 @@ RUN npm run build
 # Final production image
 FROM node:20-alpine
 
-# Install system dependencies for Puppeteer and PDF generation
+# Install Chromium and dependencies
 RUN apk add --no-cache \
     chromium \
-    nss \
     freetype \
-    freetype-dev \
     harfbuzz \
     ca-certificates \
-    ttf-freefont \
-    ttf-dejavu \
-    ttf-droid \
-    ttf-liberation \
-    && rm -rf /var/cache/apk/*
+    ttf-freefont
 
 # Configure Puppeteer to use installed Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
